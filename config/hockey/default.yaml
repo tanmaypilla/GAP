@@ -1,0 +1,45 @@
+# Default Config for Hockey (Standard Joint Modality)
+# Usage: python main.py -c config/hockey/default.yaml
+
+work_dir: ./work_dir/hockey/default_joint
+model_saved_name: ./runs/hockey_default_joint
+
+# 1. Feeder Settings
+feeder: feeders.feeder_hockey.Feeder
+train_feeder_args:
+  data_path: /data/skating_actions_dataset/annotations/train.pkl
+  split: train
+  window_size: 64
+  normalization: True
+  bone: False   # Default is Joint, so Bone is False
+  vel: False    # Default is Position, so Velocity is False
+  debug: False
+
+test_feeder_args:
+  data_path: /data/skating_actions_dataset/annotations/test.pkl
+  split: test
+  window_size: 64
+  normalization: True
+  bone: False
+  vel: False
+
+# 2. Model Architecture
+model: model.ctrgcn.Model_lst_4part_hockey
+model_args:
+  num_class: 12
+  num_point: 20       # Custom 20-point hockey graph
+  num_person: 1
+  graph: graph.hockey.Graph
+  graph_args:
+    labeling_mode: 'spatial'
+  head: ['ViT-B/32']
+
+# 3. Optimization Parameters
+weight_decay: 0.0004
+base_lr: 0.1
+num_epoch: 45
+step: [30, 40]   # Decay earlier (30), polish for 10 epochs, final decay (40), finish.
+device: [0]           # GPU ID
+batch_size: 64
+test_batch_size: 64
+nesterov: True

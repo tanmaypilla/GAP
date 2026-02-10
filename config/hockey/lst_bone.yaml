@@ -1,0 +1,37 @@
+work_dir: ./work_dir/hockey/lst_bone
+model_saved_name: ./runs/hockey_lst_bone
+
+feeder: feeders.feeder_hockey.Feeder
+train_feeder_args:
+  data_path: ../../../../data/skating_actions_dataset/annotations/train.pkl
+  split: train
+  window_size: 64
+  normalization: True
+  bone: True   # <--- ACTIVATES BONE CALCULATION
+  vel: False
+
+test_feeder_args:
+  data_path: ../../../../data/skating_actions_dataset/annotations/test.pkl
+  split: test
+  window_size: 64
+  normalization: True
+  bone: True   # <--- IMPORTANT
+  vel: False
+
+model.ctrgcn.Model_lst_4part_bone_hockey
+model_args:
+  num_class: 12
+  num_point: 20
+  num_person: 1
+  graph: graph.hockey.Graph
+  graph_args:
+    labeling_mode: 'spatial'
+
+weight_decay: 0.0004
+base_lr: 0.1
+num_epoch: 45
+step: [30, 40]   # Decay earlier (30), polish for 10 epochs, final decay (40), finish.
+device: [0]
+batch_size: 64
+test_batch_size: 64
+nesterov: True

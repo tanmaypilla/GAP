@@ -1,0 +1,41 @@
+# Linear Skeleton Transformer (LST) Config for Hockey
+
+work_dir: ./work_dir/hockey/lst_joint
+model_saved_name: ./runs/hockey_lst_joint
+
+# 1. Feeder (Data Loader) settings
+feeder: feeders.feeder_hockey.Feeder
+train_feeder_args:
+  data_path: ../../../../data/skating_actions_dataset/annotations/train.pkl
+  split: train
+  window_size: 64
+  normalization: True
+  random_choose: False
+  random_move: False
+  window_size: 64 
+
+test_feeder_args:
+  data_path: ../../../../data/skating_actions_dataset/annotations/test.pkl
+  split: test
+  window_size: 64
+  normalization: True
+
+# 2. Model Architecture
+model: model.ctrgcn.Model_lst_4part  # Ensure you are using the 4-part GAP model
+model_args:
+  num_class: 12        # Your 12 Hockey Classes
+  num_point: 20        # <--- HERE IS THE UPDATE
+  num_person: 1
+  graph: graph.hockey.Graph
+  graph_args:
+    labeling_mode: 'spatial'
+
+# 3. Optimization
+weight_decay: 0.0004
+base_lr: 0.1
+num_epoch: 45
+step: [30, 40]   # Decay earlier (30), polish for 10 epochs, final decay (40), finish.
+device: [0]
+batch_size: 64
+test_batch_size: 64
+nesterov: True
