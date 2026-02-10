@@ -1,0 +1,12 @@
+gliding forward
+accelerating forward
+gliding backward
+accelerating backward
+forward-to-backward transition
+backward-to-forward transition
+post-whistle gliding
+rapid deceleration
+faceoff body position
+maintain position
+prone on ice
+on one knee
