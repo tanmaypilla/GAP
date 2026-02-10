@@ -9,6 +9,7 @@ import clip
 from Text_Prompt import *
 from tools import *
 from einops import rearrange, repeat
+from graph.hockey import Graph
 
 
 class TextCLIP(nn.Module):
@@ -165,7 +166,8 @@ class CTRGC(nn.Module):
         super(CTRGC, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        if in_channels == 3 or in_channels == 9:
+        # Check if in_channels is small (<= 3) to support 2D data (x,y)
+        if in_channels <= 3 or in_channels == 9:
             self.rel_channels = 8
             self.mid_channels = 16
         else:
@@ -387,10 +389,15 @@ class Model_lst_4part(nn.Module):
         self.linear_head = nn.ModuleDict()
         self.logit_scale = nn.Parameter(torch.ones(1,5) * np.log(1 / 0.07))
 
-        self.part_list = nn.ModuleList()
-
-        for i in range(4):
-            self.part_list.append(nn.Linear(256,512))
+        part_dim = 512 # Default for ViT-B/32 and ViT-B/16
+        if 'ViT-L/14' in self.head:
+            part_dim = 768
+        elif 'RN50' in self.head:
+            part_dim = 1024
+            
+        # Initialize Part List with the correct dimension
+        self.part_list = nn.ModuleList([nn.Linear(256, part_dim) for i in range(4)])
+        # --------------------------------------------------------
 
         self.head = head
         if 'ViT-B/32' in self.head:
@@ -515,10 +522,12 @@ class Model_lst_4part_bone(nn.Module):
         self.linear_head = nn.ModuleDict()
         self.logit_scale = nn.Parameter(torch.ones(1,5) * np.log(1 / 0.07))
 
-        self.part_list = nn.ModuleList()
-
-        for i in range(4):
-            self.part_list.append(nn.Linear(256,512))
+        part_dim = 512 # Default for ViT-B/32 and ViT-B/16
+        if 'ViT-L/14' in self.head:
+            part_dim = 768
+        elif 'RN50' in self.head:
+            part_dim = 1024
+        self.part_list = nn.ModuleList([nn.Linear(256, part_dim) for i in range(4)])
 
         self.head = head
         if 'ViT-B/32' in self.head:
@@ -644,10 +653,12 @@ class Model_lst_4part_ucla(nn.Module):
         self.linear_head = nn.ModuleDict()
         self.logit_scale = nn.Parameter(torch.ones(1,5) * np.log(1 / 0.07))
 
-        self.part_list = nn.ModuleList()
-
-        for i in range(4):
-            self.part_list.append(nn.Linear(256,512))
+        part_dim = 512 # Default for ViT-B/32 and ViT-B/16
+        if 'ViT-L/14' in self.head:
+            part_dim = 768
+        elif 'RN50' in self.head:
+            part_dim = 1024
+        self.part_list = nn.ModuleList([nn.Linear(256, part_dim) for i in range(4)])
 
         self.head = head
         if 'ViT-B/32' in self.head:
@@ -774,10 +785,12 @@ class Model_lst_4part_bone_ucla(nn.Module):
         self.linear_head = nn.ModuleDict()
         self.logit_scale = nn.Parameter(torch.ones(1,5) * np.log(1 / 0.07))
 
-        self.part_list = nn.ModuleList()
-
-        for i in range(4):
-            self.part_list.append(nn.Linear(256,512))
+        part_dim = 512 # Default for ViT-B/32 and ViT-B/16
+        if 'ViT-L/14' in self.head:
+            part_dim = 768
+        elif 'RN50' in self.head:
+            part_dim = 1024
+        self.part_list = nn.ModuleList([nn.Linear(256, part_dim) for i in range(4)])
 
         self.head = head
         if 'ViT-B/32' in self.head:
@@ -866,3 +879,128 @@ class Model_lst_4part_bone_ucla(nn.Module):
         x = self.drop_out(x)
 
         return self.fc(x), feature_dict, self.logit_scale, [head_feature, hand_feature, hip_feature, foot_feature]
+
+class Model_lst_4part_hockey(nn.Module):
+    def __init__(self, num_class=12, num_point=20, num_person=1, graph=None, graph_args=dict(), in_channels=2,
+                 drop_out=0, adaptive=True, head=['ViT-B/32'], k=0):
+        super(Model_lst_4part_hockey, self).__init__()
+
+        if graph is None:
+            raise ValueError()
+        else:
+            Graph = import_class(graph)
+            self.graph = Graph(**graph_args)
+
+        A = self.graph.A
+        self.A_vector = self.get_A(graph, k).float()
+
+        self.num_class = num_class
+        self.num_point = num_point
+        self.data_bn = nn.BatchNorm1d(num_person * in_channels * num_point)
+
+        base_channel = 64
+        self.l1 = TCN_GCN_unit(in_channels, base_channel, A, residual=False, adaptive=adaptive)
+        self.l2 = TCN_GCN_unit(base_channel, base_channel, A, adaptive=adaptive)
+        self.l3 = TCN_GCN_unit(base_channel, base_channel, A, adaptive=adaptive)
+        self.l4 = TCN_GCN_unit(base_channel, base_channel, A, adaptive=adaptive)
+        self.l5 = TCN_GCN_unit(base_channel, base_channel*2, A, stride=2, adaptive=adaptive)
+        self.l6 = TCN_GCN_unit(base_channel*2, base_channel*2, A, adaptive=adaptive)
+        self.l7 = TCN_GCN_unit(base_channel*2, base_channel*2, A, adaptive=adaptive)
+        self.l8 = TCN_GCN_unit(base_channel*2, base_channel*4, A, stride=2, adaptive=adaptive)
+        self.l9 = TCN_GCN_unit(base_channel*4, base_channel*4, A, adaptive=adaptive)
+        self.l10 = TCN_GCN_unit(base_channel*4, base_channel*4, A, adaptive=adaptive)
+
+        self.linear_head = nn.ModuleDict()
+        self.logit_scale = nn.Parameter(torch.ones(1,5) * np.log(1 / 0.07))
+
+        part_dim = 512 # Default for ViT-B/32 and ViT-B/16
+        if 'ViT-L/14' in head:
+            part_dim = 768
+        elif 'RN50' in head:
+            part_dim = 1024
+        self.part_list = nn.ModuleList([nn.Linear(256, part_dim) for i in range(4)])
+
+        self.head = head
+        # Initialize text headers
+        if 'ViT-B/32' in self.head:
+            self.linear_head['ViT-B/32'] = nn.Linear(256,512)
+            conv_init(self.linear_head['ViT-B/32'])
+        if 'ViT-L/14' in self.head:
+            self.linear_head['ViT-L/14'] = nn.Linear(256,768)
+            conv_init(self.linear_head['ViT-L/14'])
+
+        self.fc = nn.Linear(base_channel*4, num_class)
+        nn.init.normal_(self.fc.weight, 0, math.sqrt(2. / num_class))
+        bn_init(self.data_bn, 1)
+        if drop_out:
+            self.drop_out = nn.Dropout(drop_out)
+        else:
+            self.drop_out = lambda x: x
+
+    def get_A(self, graph, k):
+        Graph = import_class(graph)()
+        A_outward = Graph.A_outward_binary
+        I = np.eye(Graph.num_node)
+        if k == 0:
+            return torch.from_numpy(I)
+        return torch.from_numpy(I - np.linalg.matrix_power(A_outward, k))
+
+    def forward(self, x):
+        if len(x.shape) == 3:
+            N, T, VC = x.shape
+            x = x.view(N, T, self.num_point, -1).permute(0, 3, 1, 2).contiguous().unsqueeze(-1)
+        N, C, T, V, M = x.size()
+
+        x = rearrange(x, 'n c t v m -> (n m t) v c', m=M, v=V).contiguous()
+        x = self.A_vector.to(x.device).expand(N*M*T, -1, -1) @ x
+        x = rearrange(x, '(n m t) v c -> n (m v c) t', m=M, t=T).contiguous()
+        x = self.data_bn(x)
+        x = x.view(N, M, V, C, T).permute(0, 1, 3, 4, 2).contiguous().view(N * M, C, T, V)
+        
+        # GCN Blocks
+        x = self.l1(x); x = self.l2(x); x = self.l3(x); x = self.l4(x)
+        x = self.l5(x); x = self.l6(x); x = self.l7(x); x = self.l8(x)
+        x = self.l9(x); x = self.l10(x)
+
+        # N*M,C,T,V
+        c_new = x.size(1)
+        feature = x.view(N,M,c_new,T//4,V)
+
+        # --- HOCKEY PARTITION (0-19) ---
+        # Head: Nose(0), Ears(1,2)
+        head_list = torch.Tensor([0, 1, 2]).long()
+        
+        # Hand/Arm: Shoulders(3,4), Elbows(7,9), Wrists(8,10) + STICK(17,18,19)
+        # We include the Stick in "Hand" as it is manipulated by hands
+        hand_list = torch.Tensor([3, 4, 7, 8, 9, 10, 17, 18, 19]).long()
+        
+        # Foot/Leg: Knees(11,12), Ankles(13,14), Feet(15,16)
+        foot_list = torch.Tensor([11, 12, 13, 14, 15, 16]).long()
+        
+        # Hip: Hips(5,6)
+        hip_list = torch.Tensor([5, 6]).long()
+        
+        # Calculate Part Features
+        head_feature = self.part_list[0](feature[:,:,:,:,head_list].mean(4).mean(3).mean(1))
+        hand_feature = self.part_list[1](feature[:,:,:,:,hand_list].mean(4).mean(3).mean(1))
+        hip_feature = self.part_list[2](feature[:,:,:,:,foot_list].mean(4).mean(3).mean(1))
+        foot_feature = self.part_list[3](feature[:,:,:,:,hip_list].mean(4).mean(3).mean(1))
+
+        # Global Features
+        x = x.view(N, M, c_new, -1)
+        x = x.mean(3).mean(1)
+
+        feature_dict = dict()
+        for name in self.head:
+            feature_dict[name] = self.linear_head[name](x)
+        
+        x = self.drop_out(x)
+
+        return self.fc(x), feature_dict, self.logit_scale, [head_feature, hand_feature, hip_feature, foot_feature]
+
+
+class Model_lst_4part_bone_hockey(Model_lst_4part_hockey):
+    def __init__(self, *args, **kwargs):
+        # Bone model uses k=1 for neighbor distance
+        kwargs['k'] = 1
+        super().__init__(*args, **kwargs)
