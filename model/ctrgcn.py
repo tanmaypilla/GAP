@@ -881,7 +881,7 @@ class Model_lst_4part_bone_ucla(nn.Module):
         return self.fc(x), feature_dict, self.logit_scale, [head_feature, hand_feature, hip_feature, foot_feature]
 
 class Model_lst_4part_hockey(nn.Module):
-    def __init__(self, num_class=12, num_point=20, num_person=1, graph=None, graph_args=dict(), in_channels=2,
+    def __init__(self, num_class=11, num_point=20, num_person=1, graph=None, graph_args=dict(), in_channels=2,
                  drop_out=0, adaptive=True, head=['ViT-B/32'], k=0):
         super(Model_lst_4part_hockey, self).__init__()
 
@@ -970,8 +970,7 @@ class Model_lst_4part_hockey(nn.Module):
         # Head: Nose(0), Ears(1,2)
         head_list = torch.Tensor([0, 1, 2]).long()
         
-        # Hand/Arm: Shoulders(3,4), Elbows(7,9), Wrists(8,10) + STICK(17,18,19)
-        # We include the Stick in "Hand" as it is manipulated by hands
+        # Hand/Arm: Shoulders(3,4), Elbows(7,9), Wrists(8,10), Stick(17,18,19)
         hand_list = torch.Tensor([3, 4, 7, 8, 9, 10, 17, 18, 19]).long()
         
         # Foot/Leg: Knees(11,12), Ankles(13,14), Feet(15,16)
@@ -983,8 +982,8 @@ class Model_lst_4part_hockey(nn.Module):
         # Calculate Part Features
         head_feature = self.part_list[0](feature[:,:,:,:,head_list].mean(4).mean(3).mean(1))
         hand_feature = self.part_list[1](feature[:,:,:,:,hand_list].mean(4).mean(3).mean(1))
-        hip_feature = self.part_list[2](feature[:,:,:,:,foot_list].mean(4).mean(3).mean(1))
-        foot_feature = self.part_list[3](feature[:,:,:,:,hip_list].mean(4).mean(3).mean(1))
+        hip_feature = self.part_list[2](feature[:,:,:,:,hip_list].mean(4).mean(3).mean(1))
+        foot_feature = self.part_list[3](feature[:,:,:,:,foot_list].mean(4).mean(3).mean(1))
 
         # Global Features
         x = x.view(N, M, c_new, -1)

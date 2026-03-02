@@ -1,5 +1,6 @@
 import torch
 import clip
+import os
 
 
 label_text_map = []
@@ -185,3 +186,118 @@ def text_prompt_openai_pasta_pool_4part_ucla():
     
     return classes, num_text_aug, text_dict
 
+
+def text_prompt_hockey_pasta_pool_4part(data_path='./text/'):
+    """
+    Load Hockey PASTA text and split by body parts, matching NTU's structure.
+
+    hockey_pasta.txt has 6 semicolon-delimited segments per line:
+        "action_name, head_desc; hand_desc; arm_desc; hip_desc; leg_desc; foot_desc"
+
+    These are mapped to 4 body-part groups (matching NTU):
+        ii=0: global  — "A hockey player {action_name}"
+        ii=1: head    — "{action}, {head_desc}"
+        ii=2: hands   — "{action}, {hand_desc}, {arm_desc}"
+        ii=3: hips    — "{action}, {hip_desc}"
+        ii=4: legs    — "{action}, {leg_desc}, {foot_desc}"
+
+    Returns:
+        classes: concatenated tensor of all text embeddings
+        num_text_aug: 5 (global + 4 body parts)
+        text_dict: {aug_id: tensor[11, 77]}
+    """
+    # Load clean labels from hockey_label.txt
+    label_path = os.path.join(data_path, 'hockey_label.txt')
+    with open(label_path, 'r') as f:
+        labels = [line.strip() for line in f.readlines() if line.strip()]
+
+    # Load hockey_pasta.txt — 6 semicolon-delimited body parts per line
+    pasta_path = os.path.join(data_path, 'hockey_pasta.txt')
+    with open(pasta_path, 'r') as f:
+        raw_lines = [line.strip() for line in f.readlines() if line.strip()]
+
+    # Parse: segment[0] may contain "action, head_desc" — extract pure head_desc
+    pasta_parsed = []
+    for line in raw_lines:
+        parts = line.split(';')
+        first = parts[0]
+        head_desc = first.split(',', 1)[1].strip() if ',' in first else first.strip()
+        pasta_parsed.append([head_desc] + [p.strip() for p in parts[1:]])
+    # pasta_parsed[i] = [head, hand, arm, hip, leg, foot]  (6 elements)
+
+    text_dict = {}
+    num_text_aug = 5
+
+    for ii in range(num_text_aug):
+        if ii == 0:
+            # Global: "A hockey player {action_name}"
+            text_dict[ii] = torch.cat([
+                clip.tokenize(f"A hockey player {label}")
+                for label in labels
+            ])
+        elif ii == 1:
+            # Head: "{action}, {head_desc}"
+            text_dict[ii] = torch.cat([
+                clip.tokenize(
+                    f"{labels[i]}, {pasta_parsed[i][0]}",
+                    truncate=True
+                )
+                for i in range(len(labels))
+            ])
+        elif ii == 2:
+            # Hands: "{action}, {hand_desc}, {arm_desc}"
+            text_dict[ii] = torch.cat([
+                clip.tokenize(
+                    f"{labels[i]}, {pasta_parsed[i][1]}, {pasta_parsed[i][2]}",
+                    truncate=True
+                )
+                for i in range(len(labels))
+            ])
+        elif ii == 3:
+            # Hips: "{action}, {hip_desc}"
+            text_dict[ii] = torch.cat([
+                clip.tokenize(
+                    f"{labels[i]}, {pasta_parsed[i][3]}",
+                    truncate=True
+                )
+                for i in range(len(labels))
+            ])
+        else:  # ii == 4
+            # Legs/Feet: "{action}, {leg_desc}, {foot_desc}"
+            text_dict[ii] = torch.cat([
+                clip.tokenize(
+                    f"{labels[i]}, {pasta_parsed[i][4]}, {pasta_parsed[i][5]}",
+                    truncate=True
+                )
+                for i in range(len(labels))
+            ])
+
+    classes = torch.cat([v for k, v in text_dict.items()])
+    return classes, num_text_aug, text_dict
+
+
+def text_prompt_hockey_random(data_path='./text/'):
+    """
+    Load hockey synonym + sentence text and pre-tokenize for random sampling.
+    Returns: list of lists of tokenized tensors (one per class).
+    """
+    # Load synonyms (comma-separated per class)
+    synonym_path = os.path.join(data_path, 'hockey_synonym_gemini_t01.txt')
+    with open(synonym_path, 'r') as f:
+        synonyms = [line.strip().split(',') for line in f.readlines() if line.strip()]
+
+    # Load sentences (one per class)
+    sentence_path = os.path.join(data_path, 'hockey_sentence.txt')
+    with open(sentence_path, 'r') as f:
+        sentences = [line.strip() for line in f.readlines() if line.strip()]
+
+    total_list = []
+    for i, class_synonyms in enumerate(synonyms):
+        temp_list = []
+        for item in class_synonyms:
+            temp_list.append(clip.tokenize(item.strip()))
+        # Add sentence description to the random pool
+        if i < len(sentences):
+            temp_list.append(clip.tokenize(sentences[i], truncate=True))
+        total_list.append(temp_list)
+    return total_list

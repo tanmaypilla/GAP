@@ -1,0 +1,52 @@
+work_dir: ./work_dir/hockey/baseline_v2
+model_saved_name: ./runs/hockey_baseline_v2
+
+feeder: feeders.feeder_hockey.Feeder
+
+train_feeder_args:
+  data_path: ./data/train_split_v2.pkl    # new train split
+  split: train
+  window_size: 64
+  normalization: True
+  bone: False
+  vel: True
+
+val_feeder_args:
+  data_path: ./data/val_split_v2.pkl      # new val split
+  split: val
+  window_size: 64
+  normalization: True
+  bone: False
+  vel: True
+
+test_feeder_args:
+  data_path: ./data/test_v2.pkl           # test split
+  split: test
+  window_size: 64
+  normalization: True
+  bone: False
+  vel: True
+
+model: model.ctrgcn.Model_lst_4part_hockey
+model_args:
+  num_class: 11
+  num_point: 20
+  num_person: 1
+  graph: graph.hockey.Graph
+  graph_args:
+    labeling_mode: 'spatial'
+  head: ['ViT-B/32']
+
+weight_decay: 0.0004
+base_lr: 0.1
+num_epoch: 60
+step: [40, 50]
+device: [0]
+batch_size: 64
+test_batch_size: 64
+nesterov: True
+
+# Hockey text-guided settings
+loss_alpha: 0.0        # no text guidance
+use_weighted_ce: False # unweighted CE
+save_epoch: 1          # save every epoch so best checkpoint always exists

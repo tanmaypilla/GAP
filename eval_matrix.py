@@ -138,8 +138,11 @@ def run_analysis(args):
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig('class_history.png')
-    print("[SUCCESS] Saved plot to class_history.png")
+    out_dir = os.path.join(args.run_dir, 'analysis')
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, 'class_history.png')
+    plt.savefig(out_path)
+    print(f"[SUCCESS] Saved plot to {out_path}")
 
 if __name__ == "__main__":
     parser = get_parser()

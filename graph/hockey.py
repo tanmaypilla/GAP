@@ -9,7 +9,7 @@ self_link = [(i, i) for i in range(num_node)]
 
 # SKELETON DEFINITION
 # 0-16: Body
-# 17-19: Stick (Disconnected from body)
+# 17-19: Stick (Connected to both wrists)
 
 skeleton_edges = [
     # Head
@@ -38,7 +38,11 @@ skeleton_edges = [
     (12, 13), # left_knee -> left_ankle
     (13, 16), # left_ankle -> left_foot_tip
     
-    # Stick (Floating subgraph)
+    # Stick → Body connection (both hands grip the stick)
+    (8, 17),  # left_wrist -> stick_top
+    (10, 17), # right_wrist -> stick_top
+
+    # Stick
     (17, 18), # stick_top -> stick_bottom
     (18, 19)  # stick_bottom -> stick_tip
 ]

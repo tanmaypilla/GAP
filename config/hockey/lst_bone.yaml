@@ -3,7 +3,7 @@ model_saved_name: ./runs/hockey_lst_bone
 
 feeder: feeders.feeder_hockey.Feeder
 train_feeder_args:
-  data_path: ../../../../data/skating_actions_dataset/annotations/train.pkl
+  data_path: ./data/train_v2.pkl
   split: train
   window_size: 64
   normalization: True
@@ -11,7 +11,7 @@ train_feeder_args:
   vel: False
 
 test_feeder_args:
-  data_path: ../../../../data/skating_actions_dataset/annotations/test.pkl
+  data_path: ./data/test_v2.pkl
   split: test
   window_size: 64
   normalization: True
@@ -20,7 +20,7 @@ test_feeder_args:
 
 model.ctrgcn.Model_lst_4part_bone_hockey
 model_args:
-  num_class: 12
+  num_class: 11
   num_point: 20
   num_person: 1
   graph: graph.hockey.Graph

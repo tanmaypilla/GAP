@@ -7,7 +7,7 @@ model_saved_name: ./runs/hockey_default_joint
 # 1. Feeder Settings
 feeder: feeders.feeder_hockey.Feeder
 train_feeder_args:
-  data_path: /data/skating_actions_dataset/annotations/train.pkl
+  data_path: ./data/train_v2.pkl
   split: train
   window_size: 64
   normalization: True
@@ -16,7 +16,7 @@ train_feeder_args:
   debug: False
 
 test_feeder_args:
-  data_path: /data/skating_actions_dataset/annotations/test.pkl
+  data_path: ./data/test_v2.pkl
   split: test
   window_size: 64
   normalization: True
@@ -26,7 +26,7 @@ test_feeder_args:
 # 2. Model Architecture
 model: model.ctrgcn.Model_lst_4part_hockey
 model_args:
-  num_class: 12
+  num_class: 11
   num_point: 20       # Custom 20-point hockey graph
   num_person: 1
   graph: graph.hockey.Graph

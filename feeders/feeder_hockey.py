@@ -82,11 +82,9 @@ class Feeder(Dataset):
         data_numpy = np.transpose(data_numpy, (3, 1, 2, 0))
 
         label = sample.get('label', -1)
-        
-        # Resize temporal length to window_size (64)
-        data_numpy = self._resize_temporal(data_numpy, self.window_size)
 
         # --- NORMALIZATION (Mid-Hip Center + SCALING) ---
+        # Applied before padding so zero-padded frames remain true zeros
         if self.normalization:
             # 1. Center the skeleton
             right_hip = data_numpy[:, 0, 5, 0]
@@ -94,16 +92,16 @@ class Feeder(Dataset):
             origin = (right_hip + left_hip) / 2.0
             origin = origin[:, np.newaxis, np.newaxis, np.newaxis]
             data_numpy = data_numpy - origin
-            
-            # --- FIX 2: Scaling Factor ---
-            # Your data is 300+. We divide by 1000 to get it into the -1 to 1 range.
-            data_numpy = data_numpy / 1000.0 
+
+            # 2. Scale to approx [-1, 1] range
+            data_numpy = data_numpy / 1000.0
 
         # --- BONE MODALITY ---
+        # Applied before padding so padded zeros don't produce spurious bone vectors
         if self.bone:
             hockey_pairs = (
-                (2, 1), (2, 0), (0, 1), (3, 4), (3, 5), (4, 6), (5, 6), 
-                (3, 7), (7, 10), (4, 9), (9, 8), (5, 11), (11, 14), 
+                (2, 1), (2, 0), (0, 1), (3, 4), (3, 5), (4, 6), (5, 6),
+                (3, 7), (7, 10), (4, 9), (9, 8), (5, 11), (11, 14),
                 (14, 15), (6, 12), (12, 13), (13, 16), (17, 18), (18, 19)
             )
             bone_data = np.zeros_like(data_numpy)
@@ -112,11 +110,15 @@ class Feeder(Dataset):
             data_numpy = bone_data
 
         # --- VELOCITY MODALITY ---
+        # Applied before padding so padded zeros don't produce spurious velocities
         if self.vel:
             vel_data = np.zeros_like(data_numpy)
             vel_data[:, :-1, :, :] = data_numpy[:, 1:, :, :] - data_numpy[:, :-1, :, :]
-            vel_data[:, -1, :, :] = vel_data[:, -2, :, :] 
+            vel_data[:, -1, :, :] = vel_data[:, -2, :, :]
             data_numpy = vel_data
+
+        # Resize temporal length to window_size (64) via zero-padding
+        data_numpy = self._resize_temporal(data_numpy, self.window_size)
 
         return data_numpy, label, actual_index
 
@@ -132,11 +134,8 @@ class Feeder(Dataset):
         C, T, V, M = data.shape
         if T == target_length:
             return data
-        original_time = np.linspace(0, 1, T)
-        target_time = np.linspace(0, 1, target_length)
+        if T > target_length:
+            return data[:, :target_length, :, :]
         new_data = np.zeros((C, target_length, V, M), dtype=data.dtype)
-        for c in range(C):
-            for v in range(V):
-                for m in range(M):
-                    new_data[c, :, v, m] = np.interp(target_time, original_time, data[c, :, v, m])
+        new_data[:, :T, :, :] = data
         return new_data
