@@ -1,0 +1,51 @@
+work_dir: ./work_dir/hockey/gap_v2_tracked
+model_saved_name: ./work_dir/hockey/gap_v2_tracked/runs
+
+feeder: feeders.feeder_hockey.Feeder
+
+train_feeder_args:
+  data_path: ./data/train_split_v2.pkl
+  split: train
+  window_size: 64
+  normalization: True
+  bone: False
+  vel: True
+
+val_feeder_args:
+  data_path: ./data/val_split_v2.pkl
+  split: val
+  window_size: 64
+  normalization: True
+  bone: False
+  vel: True
+
+test_feeder_args:
+  data_path: ./data/test_v2.pkl
+  split: test
+  window_size: 64
+  normalization: True
+  bone: False
+  vel: True
+
+model: model.ctrgcn.Model_lst_4part_hockey
+model_args:
+  num_class: 11
+  num_point: 20
+  num_person: 1
+  graph: graph.hockey.Graph
+  graph_args:
+    labeling_mode: 'spatial'
+  head: ['ViT-B/32']
+
+weight_decay: 0.0004
+base_lr: 0.1
+num_epoch: 50            
+step: [40, 50]
+device: [0]
+batch_size: 64
+test_batch_size: 64
+nesterov: True
+
+loss_alpha: 0.8
+use_weighted_ce: False
+save_epoch: 1

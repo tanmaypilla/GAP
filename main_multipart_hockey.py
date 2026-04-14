@@ -473,6 +473,10 @@ class Processor():
 
         loss_value = []
         acc_value = []
+        loss_ce_value = []
+        part_names = ['global', 'head', 'hand', 'hip', 'foot']
+        loss_te_per_part = {i: [] for i in range(5)}
+        cosine_sim_per_part = {i: [] for i in range(5)}
         self.train_writer.add_scalar('epoch', epoch, self.global_step)
         self.record_time()
         timer = dict(dataloader=0.001, model=0.001, statistics=0.001)
@@ -527,11 +531,28 @@ class Processor():
 
                         loss_imgs = self.loss(logits_per_image,ground_truth)
                         loss_texts = self.loss(logits_per_text,ground_truth)
-                        loss_te_list.append((loss_imgs + loss_texts) / 2)
+                        part_loss = (loss_imgs + loss_texts) / 2
+                        loss_te_list.append(part_loss)
+
+                        # Track per-part contrastive loss
+                        loss_te_per_part[ind].append(part_loss.item())
+
+                        # Track per-part cosine similarity
+                        if ind == 0:
+                            skel_feat = feature_dict[self.arg.model_args['head'][0]]
+                        else:
+                            skel_feat = part_feature_list[ind - 1]
+                        with torch.no_grad():
+                            sf_norm = skel_feat / skel_feat.norm(dim=-1, keepdim=True)
+                            te_norm = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
+                            cos_sim = (sf_norm * te_norm).sum(dim=-1).mean()
+                        cosine_sim_per_part[ind].append(cos_sim.item())
 
                     loss = loss_ce + self.arg.loss_alpha * sum(loss_te_list) / len(loss_te_list)
                 else:
                     loss = loss_ce
+
+                loss_ce_value.append(loss_ce.item())
 
             scaler.scale(loss).backward()
             scaler.unscale_(self.optimizer)
@@ -549,6 +570,20 @@ class Processor():
             self.train_writer.add_scalar('loss', loss.data.item(), self.global_step)
             self.lr = self.optimizer.param_groups[0]['lr']
             self.train_writer.add_scalar('lr', self.lr, self.global_step)
+
+            # Per-step TensorBoard: CE and per-part contrastive losses
+            if loss_ce_value:
+                self.train_writer.add_scalar('loss_ce', loss_ce_value[-1], self.global_step)
+            if self.arg.loss_alpha > 0:
+                for pind in range(num_text_aug):
+                    if loss_te_per_part[pind]:
+                        self.train_writer.add_scalar(
+                            f'loss_contrastive/{part_names[pind]}',
+                            loss_te_per_part[pind][-1], self.global_step)
+                        self.train_writer.add_scalar(
+                            f'cosine_sim/{part_names[pind]}',
+                            cosine_sim_per_part[pind][-1], self.global_step)
+
             timer['statistics'] += self.split_time()
 
         proportion = {
@@ -557,6 +592,24 @@ class Processor():
         }
         self.print_log(
             '\tMean training loss: {:.4f}.  Mean training acc: {:.2f}%.'.format(np.mean(loss_value), np.mean(acc_value)*100))
+
+        # Epoch-level per-part summary
+        if loss_ce_value:
+            mean_ce = np.mean(loss_ce_value)
+            self.print_log('\tMean CE loss: {:.4f}'.format(mean_ce))
+            self.train_writer.add_scalar('epoch_loss_ce', mean_ce, epoch)
+
+        if self.arg.loss_alpha > 0:
+            parts_summary = []
+            for pind in range(num_text_aug):
+                if loss_te_per_part[pind]:
+                    mean_loss = np.mean(loss_te_per_part[pind])
+                    mean_sim = np.mean(cosine_sim_per_part[pind])
+                    parts_summary.append(f'{part_names[pind]}={mean_loss:.4f}(sim={mean_sim:.4f})')
+                    self.train_writer.add_scalar(f'epoch_loss_contrastive/{part_names[pind]}', mean_loss, epoch)
+                    self.train_writer.add_scalar(f'epoch_cosine_sim/{part_names[pind]}', mean_sim, epoch)
+            self.print_log('\tPer-part contrastive: ' + ', '.join(parts_summary))
+
         self.print_log('\tTime consumption: [Data]{dataloader}, [Network]{model}'.format(**proportion))
 
         if save_model:
